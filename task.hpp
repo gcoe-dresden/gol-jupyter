@@ -151,8 +151,13 @@ public:
                        sizeof(int) * world_size * world_size));
   }
 
-  ///\brief load a initial world form file
-  /// TODO: improve description
+  ///\brief Loads a first world from a file. The world from the file is placed
+  /// in the upper left corner. If a line in the file is longer than dim, it is
+  /// truncated. The same happens if the number of lines is greater than dim. If
+  /// a row is smaller than dim or the number of rows is smaller than dim, the
+  /// uncovered cells keep their value (initialize init_word with zeros before
+  /// to avoid unexpected behavior).
+  ///
   ///\param [in] filename - path of the input file
   ///
   void load_world(std::string filename) {
@@ -295,7 +300,7 @@ class Task1 : public Base_task {
 public:
   Task1(unsigned int dim) : Base_task(dim, false) {}
 
-  ///\brief run the compiled copy_ghostcols kernel
+  ///\brief run the compiled ghostCols kernel
   ///
   ///\param [in] kernel_name - name of the kernel
   ///\param [in] blocks - cuda block size
@@ -419,24 +424,28 @@ public:
 
   ///\brief run the ghost and GOL kernel
   ///
-  ///\param [in] GOL_kernel_name - name of the Game of Life kernel
+  ///\param [in] ghost_row_kernel_name - name of the Ghostcopy Row kernel
   ///\param [in] row_blocks - cuda block size of the row ghost kernel
   ///\param [in] row_threads - cuda thread size of the row ghost kernel
+  ///\param [in] ghost_col_kernel_name - name of the Ghostcopy Column kernel
   ///\param [in] col_blocks - cuda block size of the column ghost kernel
   ///\param [in] col_threads - cuda thread size of the column ghost kernel
+  ///\param [in] GOL_kernel_name - name of the Game of Life kernel
   ///\param [in] gol_blocks - cuda block size of the GOL kernel
   ///\param [in] gol_threads - cuda thread size of the GOL kernel
   ///
-  inline void run_kernel(std::string GOL_kernel_name, dim3 row_blocks,
-                         dim3 row_threads, dim3 col_blocks, dim3 col_threads,
-                         dim3 gol_blocks, dim3 gol_threads) {
-    if (instances.count("copy_ghostrows") == 0) {
-      std::cerr << "copy_ghostrows was not compiled" << std::endl;
+  inline void run_kernel(std::string ghost_row_kernel_name, dim3 row_blocks,
+                         dim3 row_threads, std::string ghost_col_kernel_name,
+                         dim3 col_blocks, dim3 col_threads,
+                         std::string GOL_kernel_name, dim3 gol_blocks,
+                         dim3 gol_threads) {
+    if (instances.count(ghost_row_kernel_name) == 0) {
+      std::cerr << ghost_row_kernel_name << " was not compiled" << std::endl;
       return;
     }
 
-    if (instances.count("copy_ghostcols") == 0) {
-      std::cerr << "copy_ghostcols was not compiled" << std::endl;
+    if (instances.count(ghost_col_kernel_name) == 0) {
+      std::cerr << ghost_col_kernel_name << " was not compiled" << std::endl;
       return;
     }
 
@@ -445,10 +454,10 @@ public:
       return;
     }
 
-    cuCheck(instances["copy_ghostrows"]
+    cuCheck(instances[ghost_row_kernel_name]
                 ->configure(row_blocks, row_threads)
                 .launch(dim, d_world));
-    cuCheck(instances["copy_ghostcols"]
+    cuCheck(instances[ghost_col_kernel_name]
                 ->configure(col_blocks, col_threads)
                 .launch(dim, d_world));
     cuCheck(instances[GOL_kernel_name]
@@ -470,24 +479,28 @@ public:
   ///\brief run n iterations the kernel and measure the time
   ///
   ///\param [in] iteration - number of iterations
-  ///\param [in] GOL_kernel_name - name of the Game of Life kernel
+  ///\param [in] ghost_row_kernel_name - name of the Ghostcopy Row kernel
   ///\param [in] row_blocks - cuda block size of the row ghost kernel
   ///\param [in] row_threads - cuda thread size of the row ghost kernel
+  ///\param [in] ghost_col_kernel_name - name of the Ghostcopy Column kernel
   ///\param [in] col_blocks - cuda block size of the column ghost kernel
   ///\param [in] col_threads - cuda thread size of the column ghost kernel
+  ///\param [in] GOL_kernel_name - name of the Game of Life kernel
   ///\param [in] gol_blocks - cuda block size of the GOL kernel
   ///\param [in] gol_threads - cuda thread size of the GOL kernel
   ///
-  double bench_kernel(unsigned int iteration, std::string GOL_kernel_name,
-                      dim3 row_blocks, dim3 row_threads, dim3 col_blocks,
-                      dim3 col_threads, dim3 gol_blocks, dim3 gol_threads) {
-    if (instances.count("copy_ghostrows") == 0) {
-      std::cerr << "copy_ghostrows was not compiled" << std::endl;
+  double bench_kernel(unsigned int iteration, std::string ghost_row_kernel_name,
+                      dim3 row_blocks, dim3 row_threads,
+                      std::string ghost_col_kernel_name, dim3 col_blocks,
+                      dim3 col_threads, std::string GOL_kernel_name,
+                      dim3 gol_blocks, dim3 gol_threads) {
+    if (instances.count(ghost_row_kernel_name) == 0) {
+      std::cerr << "ghostRows was not compiled" << std::endl;
       return -1.0;
     }
 
-    if (instances.count("copy_ghostcols") == 0) {
-      std::cerr << "copy_ghostcols was not compiled" << std::endl;
+    if (instances.count(ghost_col_kernel_name) == 0) {
+      std::cerr << "ghostCols was not compiled" << std::endl;
       return -1.0;
     }
 
@@ -501,10 +514,10 @@ public:
 
     start = std::chrono::system_clock::now();
     for (unsigned int i = 0; i < iteration; ++i) {
-      cuCheck(instances["copy_ghostrows"]
+      cuCheck(instances[ghost_row_kernel_name]
                   ->configure(row_blocks, row_threads)
                   .launch(dim, d_world));
-      cuCheck(instances["copy_ghostcols"]
+      cuCheck(instances[ghost_col_kernel_name]
                   ->configure(col_blocks, col_threads)
                   .launch(dim, d_world));
       cuCheck(instances[GOL_kernel_name]
